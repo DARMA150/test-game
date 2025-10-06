@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stickman Jump Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(to bottom, #87CEEB, #1E90FF);
+            overflow: hidden;
+        }
+        
+        .game-container {
+            position: relative;
+            width: 800px;
+            height: 400px;
+            background-color: #f0f8ff;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+        
+        #gameCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        
+        .game-ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #333;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.7);
+        }
+        
+        .game-over {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 36px;
+            display: none;
+        }
+        
+        .game-over h2 {
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        
+        .restart-btn {
+            padding: 12px 30px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .restart-btn:hover {
+            background-color: #45a049;
+        }
+        
+        .instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            color: #333;
+            font-size: 16px;
+            text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.7);
+        }
+        
+        .cloud {
+            position: absolute;
+            background-color: white;
+            border-radius: 50%;
+            opacity: 0.8;
+        }
+        
+        .cloud::before, .cloud::after {
+            content: '';
+            position: absolute;
+            background-color: white;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div class="game-ui">
+            <div>Skor: <span id="score">0</span></div>
+            <div>Level: <span id="level">1</span></div>
+        </div>
+        
+        <div class="game-over" id="gameOverScreen">
+            <h2>Game Over!</h2>
+            <p>Skor Akhir: <span id="finalScore">0</span></p>
+            <button class="restart-btn" id="restartBtn">Main Lagi</button>
+        </div>
+        
+        <div class="instructions">
+            Tekan SPASI untuk melompat
+        </div>
+    </div>
+
+    <script>
+        // 1. Inisialisasi Game
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const levelElement = document.getElementById('level');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const finalScoreElement = document.getElementById('finalScore');
+        const restartBtn = document.getElementById('restartBtn');
+        
+        // Atur ukuran canvas
+        canvas.width = 800;
+        canvas.height = 400;
+        
+        // Variabel game
+        let score = 0;
+        let level = 1;
+        let gameSpeed = 5;
+        let gameRunning = true;
+        let gravity = 0.5;
+        
+        // Karakter stickman
+        const stickman = {
+            x: 100,
+            y: canvas.height - 100,
+            width: 30,
+            height: 60,
+            velocityY: 0,
+            jumping: false,
+            color: '#333'
+        };
+        
+        // Rintangan
+        const obstacles = [];
+        let obstacleTimer = 0;
+        const obstacleInterval = 120; // frame interval untuk membuat rintangan baru
+        
+        // Background clouds
+        const clouds = [];
+        for (let i = 0; i < 5; i++) {
+            clouds.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * 150,
+                size: 30 + Math.random() * 40,
+                speed: 0.5 + Math.random() * 1
+            });
+        }
+        
+        // 2. Deteksi Input Pemain
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && gameRunning) {
+                jump();
+            }
+        });
+        
+        canvas.addEventListener('click', () => {
+            if (gameRunning) {
+                jump();
+            }
+        });
+        
+        function jump() {
+            if (!stickman.jumping) {
+                stickman.velocityY = -12;
+                stickman.jumping = true;
+            }
+        }
+        
+        // 3. Animasi Lompat
+        function updateStickman() {
+            // Terapkan gravitasi
+            stickman.velocityY += gravity;
+            stickman.y += stickman.velocityY;
+            
+            // Cek jika stickman mendarat
+            if (stickman.y >= canvas.height - 100) {
+                stickman.y = canvas.height - 100;
+                stickman.velocityY = 0;
+                stickman.jumping = false;
+            }
+        }
+        
+        // 4. Gerakkan Rintangan
+        function createObstacle() {
+            const height = 30 + Math.random() * 40;
+            obstacles.push({
+                x: canvas.width,
+                y: canvas.height - height,
+                width: 20,
+                height: height,
+                color: '#FF4136'
+            });
+        }
+        
+        function updateObstacles() {
+            obstacleTimer++;
+            
+            // Buat rintangan baru
+            if (obstacleTimer > obstacleInterval) {
+                createObstacle();
+                obstacleTimer = 0;
+                
+                // Kurangi interval untuk membuat game lebih sulit
+                if (obstacleInterval > 60) {
+                    obstacleInterval *= 0.98;
+                }
+            }
+            
+            // Gerakkan rintangan
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].x -= gameSpeed;
+                
+                // Hapus rintangan yang sudah lewat
+                if (obstacles[i].x + obstacles[i].width < 0) {
+                    obstacles.splice(i, 1);
+                    score++;
+                    scoreElement.textContent = score;
+                    
+                    // Naik level setiap 10 poin
+                    if (score % 10 === 0) {
+                        level++;
+                        levelElement.textContent = level;
+                        gameSpeed += 0.5;
+                    }
+                }
+            }
+        }
+        
+        // 5. Deteksi Tabrakan
+        function checkCollision() {
+            for (let obstacle of obstacles) {
+                if (
+                    stickman.x < obstacle.x + obstacle.width &&
+                    stickman.x + stickman.width > obstacle.x &&
+                    stickman.y < obstacle.y + obstacle.height &&
+                    stickman.y + stickman.height > obstacle.y
+                ) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        // Update clouds
+        function updateClouds() {
+            for (let cloud of clouds) {
+                cloud.x -= cloud.speed;
+                if (cloud.x + cloud.size < 0) {
+                    cloud.x = canvas.width + cloud.size;
+                    cloud.y = Math.random() * 150;
+                }
+            }
+        }
+        
+        // Gambar elemen game
+        function draw() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Gambar background
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Gambar awan
+            ctx.fillStyle = 'white';
+            for (let cloud of clouds) {
+                ctx.beginPath();
+                ctx.arc(cloud.x, cloud.y, cloud.size, 0, Math.PI * 2);
+                ctx.arc(cloud.x - cloud.size * 0.3, cloud.y, cloud.size * 0.8, 0, Math.PI * 2);
+                ctx.arc(cloud.x + cloud.size * 0.3, cloud.y, cloud.size * 0.8, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            // Gambar tanah
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
+            
+            // Gambar stickman
+            ctx.fillStyle = stickman.color;
+            
+            // Badan
+            ctx.fillRect(stickman.x + 10, stickman.y, 10, 40);
+            
+            // Kepala
+            ctx.beginPath();
+            ctx.arc(stickman.x + 15, stickman.y - 10, 10, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Kaki (animasi sederhana berdasarkan posisi)
+            const legOffset = Math.sin(Date.now() / 100) * 5;
+            ctx.fillRect(stickman.x + 5, stickman.y + 40, 5, 20 + legOffset);
+            ctx.fillRect(stickman.x + 20, stickman.y + 40, 5, 20 - legOffset);
+            
+            // Tangan
+            ctx.fillRect(stickman.x, stickman.y + 10, 10, 5);
+            ctx.fillRect(stickman.x + 20, stickman.y + 10, 10, 5);
+            
+            // Gambar rintangan
+            for (let obstacle of obstacles) {
+                ctx.fillStyle = obstacle.color;
+                ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+                
+                // Gambar duri di atas rintangan
+                ctx.fillStyle = '#FF851B';
+                for (let i = 0; i < 3; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(obstacle.x + i * 7, obstacle.y);
+                    ctx.lineTo(obstacle.x + i * 7 + 3.5, obstacle.y - 10);
+                    ctx.lineTo(obstacle.x + i * 7 + 7, obstacle.y);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+            }
+        }
+        
+        // Game loop
+        function gameLoop() {
+            if (gameRunning) {
+                updateStickman();
+                updateObstacles();
+                updateClouds();
+                
+                // Cek tabrakan
+                if (checkCollision()) {
+                    gameRunning = false;
+                    finalScoreElement.textContent = score;
+                    gameOverScreen.style.display = 'flex';
+                }
+                
+                draw();
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // 7. Reset Game
+        function resetGame() {
+            score = 0;
+            level = 1;
+            gameSpeed = 5;
+            gameRunning = true;
+            obstacles.length = 0;
+            obstacleTimer = 0;
+            stickman.y = canvas.height - 100;
+            stickman.velocityY = 0;
+            stickman.jumping = false;
+            scoreElement.textContent = score;
+            levelElement.textContent = level;
+            gameOverScreen.style.display = 'none';
+        }
+        
+        restartBtn.addEventListener('click', resetGame);
+        
+        // Mulai game
+        gameLoop();
+    </script>
+</body>
+</html>
